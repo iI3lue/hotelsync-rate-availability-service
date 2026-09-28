@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Inventory {
+  inventory_id    String   @id @default(uuid()) @db.Uuid
+  room_type_id    String   @db.Uuid
+  date            DateTime @db.Date
+  available_count Int
+  blocked_count   Int
+
+  @@unique([room_type_id, date])
+  @@index([room_type_id, date])
+  @@map("inventory")
+}
+
+model Rate {
+  rate_id      String   @id @default(uuid()) @db.Uuid
+  room_type_id String   @db.Uuid
+  report_date  DateTime @db.Date
+  price        Decimal  @db.Decimal(10, 2)
+
+  @@map("rates")
+}
+
+model RateRule {
+  rule_id      String   @id @default(uuid()) @db.Uuid
+  room_type_id String   @db.Uuid
+  start_date   DateTime @db.Date
+  end_date     DateTime @db.Date
+  multiplier   Decimal  @db.Decimal(5, 2)
+  min_stay     Int
+
+  @@map("rate_rules")
+}
