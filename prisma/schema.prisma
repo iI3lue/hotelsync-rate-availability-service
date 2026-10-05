@@ -4,9 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Inventory {
@@ -39,4 +38,23 @@ model RateRule {
   min_stay     Int
 
   @@map("rate_rules")
+}
+
+model ProcessedEvent {
+  event_id     String   @id @db.Uuid
+  event_type   String   @db.VarChar(50)
+  processed_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("processed_events")
+}
+
+/**
+ * Claves de idempotencia para reserve/release. Un reintento de Booking
+ * con la misma clave no descuenta ni libera inventario dos veces.
+ */
+model AppliedKey {
+  key        String   @id @db.VarChar(100)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("applied_keys")
 }

@@ -32,17 +32,20 @@ export class AvailabilityController {
 
   async reserve(req: Request, res: Response, next: NextFunction) {
     try {
-      const { room_type_id, check_in, check_out, count } = req.body as {
-        room_type_id: string;
-        check_in: string;
-        check_out: string;
-        count?: number;
-      };
+      const { room_type_id, check_in, check_out, count, idempotency_key } =
+        req.body as {
+          room_type_id: string;
+          check_in: string;
+          check_out: string;
+          count?: number;
+          idempotency_key?: string;
+        };
       const result = await inventoryService.reserve(
         room_type_id,
         check_in,
         check_out,
-        count
+        count,
+        idempotency_key
       );
       res.json(result);
     } catch (err) {
@@ -52,17 +55,20 @@ export class AvailabilityController {
 
   async release(req: Request, res: Response, next: NextFunction) {
     try {
-      const { room_type_id, check_in, check_out, count } = req.body as {
-        room_type_id: string;
-        check_in: string;
-        check_out: string;
-        count?: number;
-      };
+      const { room_type_id, check_in, check_out, count, idempotency_key } =
+        req.body as {
+          room_type_id: string;
+          check_in: string;
+          check_out: string;
+          count?: number;
+          idempotency_key?: string;
+        };
       const result = await inventoryService.release(
         room_type_id,
         check_in,
         check_out,
-        count
+        count,
+        idempotency_key
       );
       res.json(result);
     } catch (err) {

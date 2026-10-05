@@ -10,6 +10,9 @@ export const reserveSchema = z
     check_in: dateSchema,
     check_out: dateSchema,
     count: z.number().int().positive().default(1),
+    // Clave de idempotencia (ej. booking_id:confirm). Reintentos con la
+    // misma clave no aplican el movimiento dos veces.
+    idempotency_key: z.string().min(1).max(100).optional(),
   })
   .refine((data) => data.check_out > data.check_in, {
     message: "check_out must be after check_in",

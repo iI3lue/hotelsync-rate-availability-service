@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { availabilityController } from "../controllers/availability.controller.js";
+import { requireServiceKey } from "../lib/auth.js";
 import { validate } from "../middleware/validate.js";
 import { availabilityQuerySchema, availabilityRangeQuerySchema } from "../validators/availability.js";
 import { reserveSchema, releaseSchema } from "../validators/reserve.js";
@@ -18,11 +19,13 @@ router.get(
 );
 router.post(
   "/reserve",
+  requireServiceKey,
   validate(reserveSchema),
   availabilityController.reserve.bind(availabilityController)
 );
 router.post(
   "/release",
+  requireServiceKey,
   validate(releaseSchema),
   availabilityController.release.bind(availabilityController)
 );

@@ -6,6 +6,7 @@ import rateRulesRouter from "./routes/rate-rules.js";
 import blocksRouter from "./routes/blocks.js";
 import prisma from "./lib/prisma.js";
 import { cachePing } from "./lib/cache.js";
+import { startPhysicalRoomConsumer } from "./lib/physical-room-consumer.js";
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -46,6 +47,13 @@ if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
     console.log(`Rate & Availability Service running on port ${PORT}`);
   });
+
+  if (process.env.RABBITMQ_URL) {
+    startPhysicalRoomConsumer().catch((err) =>
+      console.error("[consumer] no se pudo iniciar", err)
+    );
+    console.log("RabbitMQ consumer started (physical-room.created)");
+  }
 }
 
 export default app;

@@ -239,15 +239,30 @@ export class InventoryService {
    * Reserva inventario para un rango de fechas (RN-1).
    * Decrementa `available_count` con bloqueo optimista (CAS): si en alguna
    * fecha no hay stock, la transacción se aborta y no queda decremento parcial.
+   * Con `idempotencyKey`, el movimiento se registra en la misma transacción:
+   * un reintento con la misma clave no descuenta dos veces.
    */
-  async reserve(roomTypeId: string, checkIn: string, checkOut: string, count = 1) {
+  async reserve(
+    roomTypeId: string,
+    checkIn: string,
+    checkOut: string,
+    count = 1,
+    idempotencyKey?: string
+  ) {
     const dates = enumerateDates(checkIn, checkOut);
 
     if (dates.length === 0) {
       throw new AppError(400, "check_out must be after check_in", "Bad Request");
     }
 
-    await prisma.$transaction(async (tx) => {
+    const applied = await prisma.$transaction(async (tx) => {
+      if (idempotencyKey) {
+        const existing = await tx.appliedKey.findUnique({
+          where: { key: idempotencyKey },
+        });
+        if (existing) return false;
+        await tx.appliedKey.create({ data: { key: idempotencyKey } });
+      }
       for (const date of dates) {
         const result = await tx.inventory.updateMany({
           where: {
@@ -266,6 +281,7 @@ export class InventoryService {
           );
         }
       }
+      return true;
     });
 
     // Invalidación inmediata de cada noche del rango (PRD).
@@ -273,27 +289,48 @@ export class InventoryService {
       ...dates.map((d) => availKey(roomTypeId, formatDate(d)))
     );
 
-    return { reserved: true, start_date: checkIn, end_date: checkOut, count };
+    return {
+      reserved: true,
+      start_date: checkIn,
+      end_date: checkOut,
+      count,
+      deduplicated: !applied,
+    };
   }
 
   /**
    * Libera inventario reservado para un rango de fechas (RN-2).
    * Incrementa `available_count` por cada fecha de la estancia.
+   * Acepta la misma clave de idempotencia que la reserva que compensa.
    */
-  async release(roomTypeId: string, checkIn: string, checkOut: string, count = 1) {
+  async release(
+    roomTypeId: string,
+    checkIn: string,
+    checkOut: string,
+    count = 1,
+    idempotencyKey?: string
+  ) {
     const dates = enumerateDates(checkIn, checkOut);
 
     if (dates.length === 0) {
       throw new AppError(400, "check_out must be after check_in", "Bad Request");
     }
 
-    await prisma.$transaction(async (tx) => {
+    const applied = await prisma.$transaction(async (tx) => {
+      if (idempotencyKey) {
+        const existing = await tx.appliedKey.findUnique({
+          where: { key: idempotencyKey },
+        });
+        if (existing) return false;
+        await tx.appliedKey.create({ data: { key: idempotencyKey } });
+      }
       for (const date of dates) {
         await tx.inventory.updateMany({
           where: { room_type_id: roomTypeId, date },
           data: { available_count: { increment: count } },
         });
       }
+      return true;
     });
 
     // Invalidación inmediata de cada noche del rango (PRD).
@@ -301,7 +338,13 @@ export class InventoryService {
       ...dates.map((d) => availKey(roomTypeId, formatDate(d)))
     );
 
-    return { released: true, start_date: checkIn, end_date: checkOut, count };
+    return {
+      released: true,
+      start_date: checkIn,
+      end_date: checkOut,
+      count,
+      deduplicated: !applied,
+    };
   }
 }
 

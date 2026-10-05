@@ -109,9 +109,13 @@ describe("InventoryService", () => {
   });
 
   describe("reserve", () => {
-    const txMock = { inventory: { updateMany: jest.fn() } };
+    const txMock = {
+      inventory: { updateMany: jest.fn() },
+      appliedKey: { findUnique: jest.fn(), create: jest.fn() },
+    };
 
     beforeEach(() => {
+      txMock.appliedKey.findUnique.mockResolvedValue(null);
       mockPrisma.$transaction.mockImplementation(
         async (cb: (tx: typeof txMock) => Promise<void>) => cb(txMock)
       );
@@ -154,12 +158,43 @@ describe("InventoryService", () => {
         inventoryService.reserve("rt1", "2026-10-05", "2026-10-05", 1)
       ).rejects.toThrow(AppError);
     });
+
+    it("should not decrement twice with the same idempotency key", async () => {
+      txMock.inventory.updateMany.mockResolvedValue({ count: 1 });
+      txMock.appliedKey.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ key: "booking:1:confirm" });
+
+      const first = await inventoryService.reserve(
+        "rt1",
+        "2026-10-01",
+        "2026-10-03",
+        1,
+        "booking:1:confirm"
+      );
+      const retry = await inventoryService.reserve(
+        "rt1",
+        "2026-10-01",
+        "2026-10-03",
+        1,
+        "booking:1:confirm"
+      );
+
+      expect(first.deduplicated).toBe(false);
+      expect(retry.deduplicated).toBe(true);
+      // 2 noches aplicadas una sola vez, no cuatro.
+      expect(txMock.inventory.updateMany).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe("release", () => {
-    const txMock = { inventory: { updateMany: jest.fn() } };
+    const txMock = {
+      inventory: { updateMany: jest.fn() },
+      appliedKey: { findUnique: jest.fn(), create: jest.fn() },
+    };
 
     beforeEach(() => {
+      txMock.appliedKey.findUnique.mockResolvedValue(null);
       mockPrisma.$transaction.mockImplementation(
         async (cb: (tx: typeof txMock) => Promise<void>) => cb(txMock)
       );
