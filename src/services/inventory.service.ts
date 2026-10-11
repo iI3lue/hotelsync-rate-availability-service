@@ -1,5 +1,6 @@
 import prisma from "../lib/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
+import { enqueueOutboxEvent } from "../lib/outbox.js";
 import {
   AVAIL_TTL_SECONDS,
   availKey,
@@ -105,42 +106,53 @@ export class InventoryService {
   }
 
   async block(roomTypeId: string, date: string, count: number) {
-    const inventory = await prisma.inventory.findUnique({
-      where: {
-        room_type_id_date: {
-          room_type_id: roomTypeId,
-          date: new Date(date),
+    const updated = await prisma.$transaction(async (tx) => {
+      const inventory = await tx.inventory.findUnique({
+        where: {
+          room_type_id_date: {
+            room_type_id: roomTypeId,
+            date: new Date(date),
+          },
         },
-      },
-    });
+      });
 
-    if (!inventory) {
-      throw new AppError(
-        404,
-        `No inventory found for room type ${roomTypeId} on ${date}`,
-        "Not Found"
-      );
-    }
+      if (!inventory) {
+        throw new AppError(
+          404,
+          `No inventory found for room type ${roomTypeId} on ${date}`,
+          "Not Found"
+        );
+      }
 
-    if (count > inventory.available_count) {
-      throw new AppError(
-        400,
-        `Cannot block ${count} rooms: only ${inventory.available_count} available`,
-        "Bad Request"
-      );
-    }
+      if (count > inventory.available_count) {
+        throw new AppError(
+          400,
+          `Cannot block ${count} rooms: only ${inventory.available_count} available`,
+          "Bad Request"
+        );
+      }
 
-    const updated = await prisma.inventory.update({
-      where: {
-        room_type_id_date: {
-          room_type_id: roomTypeId,
-          date: new Date(date),
+      const changed = await tx.inventory.update({
+        where: {
+          room_type_id_date: {
+            room_type_id: roomTypeId,
+            date: new Date(date),
+          },
         },
-      },
-      data: {
-        available_count: inventory.available_count - count,
-        blocked_count: inventory.blocked_count + count,
-      },
+        data: {
+          available_count: inventory.available_count - count,
+          blocked_count: inventory.blocked_count + count,
+        },
+      });
+      await enqueueOutboxEvent(tx, "availability.updated", {
+        room_type_id: roomTypeId,
+        date,
+        available_count: changed.available_count,
+        blocked_count: changed.blocked_count,
+        reason: "blocked",
+        occurred_at: new Date().toISOString(),
+      });
+      return changed;
     });
 
     // Invalidación inmediata (PRD): el próximo GET pega a la DB.
@@ -153,42 +165,53 @@ export class InventoryService {
   }
 
   async unblock(roomTypeId: string, date: string, count: number) {
-    const inventory = await prisma.inventory.findUnique({
-      where: {
-        room_type_id_date: {
-          room_type_id: roomTypeId,
-          date: new Date(date),
+    const updated = await prisma.$transaction(async (tx) => {
+      const inventory = await tx.inventory.findUnique({
+        where: {
+          room_type_id_date: {
+            room_type_id: roomTypeId,
+            date: new Date(date),
+          },
         },
-      },
-    });
+      });
 
-    if (!inventory) {
-      throw new AppError(
-        404,
-        `No inventory found for room type ${roomTypeId} on ${date}`,
-        "Not Found"
-      );
-    }
+      if (!inventory) {
+        throw new AppError(
+          404,
+          `No inventory found for room type ${roomTypeId} on ${date}`,
+          "Not Found"
+        );
+      }
 
-    if (count > inventory.blocked_count) {
-      throw new AppError(
-        400,
-        `Cannot unblock ${count} rooms: only ${inventory.blocked_count} blocked`,
-        "Bad Request"
-      );
-    }
+      if (count > inventory.blocked_count) {
+        throw new AppError(
+          400,
+          `Cannot unblock ${count} rooms: only ${inventory.blocked_count} blocked`,
+          "Bad Request"
+        );
+      }
 
-    const updated = await prisma.inventory.update({
-      where: {
-        room_type_id_date: {
-          room_type_id: roomTypeId,
-          date: new Date(date),
+      const changed = await tx.inventory.update({
+        where: {
+          room_type_id_date: {
+            room_type_id: roomTypeId,
+            date: new Date(date),
+          },
         },
-      },
-      data: {
-        available_count: inventory.available_count + count,
-        blocked_count: inventory.blocked_count - count,
-      },
+        data: {
+          available_count: inventory.available_count + count,
+          blocked_count: inventory.blocked_count - count,
+        },
+      });
+      await enqueueOutboxEvent(tx, "availability.updated", {
+        room_type_id: roomTypeId,
+        date,
+        available_count: changed.available_count,
+        blocked_count: changed.blocked_count,
+        reason: "unblocked",
+        occurred_at: new Date().toISOString(),
+      });
+      return changed;
     });
 
     // Invalidación inmediata (PRD): el próximo GET pega a la DB.
@@ -201,38 +224,49 @@ export class InventoryService {
   }
 
   async setInventory(roomTypeId: string, date: string, availableCount: number) {
-    const existing = await prisma.inventory.findUnique({
-      where: {
-        room_type_id_date: {
-          room_type_id: roomTypeId,
-          date: new Date(date),
-        },
-      },
-    });
-
-    // Invalidación inmediata (PRD): el próximo GET pega a la DB.
-    await cacheDel(availKey(roomTypeId, date));
-
-    if (existing) {
-      return prisma.inventory.update({
+    const inventory = await prisma.$transaction(async (tx) => {
+      const existing = await tx.inventory.findUnique({
         where: {
           room_type_id_date: {
             room_type_id: roomTypeId,
             date: new Date(date),
           },
         },
-        data: { available_count: availableCount },
       });
-    }
 
-    return prisma.inventory.create({
-      data: {
+      const updated = existing
+        ? await tx.inventory.update({
+            where: {
+              room_type_id_date: {
+                room_type_id: roomTypeId,
+                date: new Date(date),
+              },
+            },
+            data: { available_count: availableCount },
+          })
+        : await tx.inventory.create({
+            data: {
+              room_type_id: roomTypeId,
+              date: new Date(date),
+              available_count: availableCount,
+              blocked_count: 0,
+            },
+          });
+
+      await enqueueOutboxEvent(tx, "availability.updated", {
         room_type_id: roomTypeId,
-        date: new Date(date),
-        available_count: availableCount,
-        blocked_count: 0,
-      },
+        date,
+        available_count: updated.available_count,
+        blocked_count: updated.blocked_count,
+        reason: "manual_adjustment",
+        occurred_at: new Date().toISOString(),
+      });
+      return updated;
     });
+
+    // Invalidación inmediata (PRD): el próximo GET pega a la DB.
+    await cacheDel(availKey(roomTypeId, date));
+    return inventory;
   }
 
   /**

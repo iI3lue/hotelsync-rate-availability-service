@@ -11,6 +11,7 @@ jest.mock("../../src/lib/prisma.js", () => ({
       create: jest.fn(),
       updateMany: jest.fn(),
     },
+    eventOutbox: { create: jest.fn() },
   },
 }));
 
@@ -41,6 +42,9 @@ describe("InventoryService cache + range", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCacheGet.mockResolvedValue(null);
+    mockPrisma.$transaction.mockImplementation(
+      async (callback: (tx: any) => Promise<unknown>) => callback(mockPrisma)
+    );
   });
 
   describe("getAvailability cache-aside", () => {

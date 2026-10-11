@@ -7,6 +7,7 @@ import blocksRouter from "./routes/blocks.js";
 import prisma from "./lib/prisma.js";
 import { cachePing } from "./lib/cache.js";
 import { startPhysicalRoomConsumer } from "./lib/physical-room-consumer.js";
+import { startOutboxDispatcher } from "./lib/outbox.js";
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -53,6 +54,8 @@ if (process.env.NODE_ENV !== "test") {
       console.error("[consumer] no se pudo iniciar", err)
     );
     console.log("RabbitMQ consumer started (physical-room.created)");
+    startOutboxDispatcher();
+    console.log("Outbox dispatcher started (availability/rate updates)");
   }
 }
 

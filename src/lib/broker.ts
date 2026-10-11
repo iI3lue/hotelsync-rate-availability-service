@@ -46,6 +46,65 @@ export async function connect(): Promise<ConfirmChannel> {
   return connecting;
 }
 
+/** Publishes a persistent topic event and waits for the broker confirm. */
+export async function publish(routingKey: string, payload: unknown): Promise<void> {
+  const connectedChannel = await connect();
+  await new Promise<void>((resolve, reject) => {
+    connectedChannel.publish(
+      EXCHANGE,
+      routingKey,
+      Buffer.from(JSON.stringify(payload)),
+      { persistent: true },
+      (error) => (error ? reject(error) : resolve())
+    );
+  });
+}
+
+export type Dispatcher = {
+  flush: (max?: number) => Promise<number>;
+  publishOne: (routingKey: string, payload: unknown) => Promise<boolean>;
+};
+
+export function createDispatcher(
+  getPending: (
+    max?: number
+  ) => Promise<Array<{ event_id: string; event_type: string; payload: unknown }>>,
+  markSent: (eventId: string) => Promise<void>
+): Dispatcher {
+  return {
+    async publishOne(routingKey, payload) {
+      try {
+        await publish(routingKey, payload);
+        return true;
+      } catch (error) {
+        console.error(`[dispatcher] error publicando ${routingKey}`, error);
+        return false;
+      }
+    },
+    async flush(max = 100) {
+      const rows = await getPending(max);
+      let delivered = 0;
+      for (const row of rows) {
+        if (!(await this.publishOne(row.event_type, row.payload))) break;
+        await markSent(row.event_id);
+        delivered += 1;
+      }
+      return delivered;
+    },
+  };
+}
+
+export function startDispatcher(
+  flush: () => Promise<unknown>,
+  intervalMs = 10_000
+): NodeJS.Timeout {
+  const timer = setInterval(() => {
+    flush().catch((error) => console.error("[dispatcher] flush falló", error));
+  }, intervalMs);
+  timer.unref?.();
+  return timer;
+}
+
 export type MessageHandler = (routingKey: string, payload: unknown) => Promise<void>;
 
 export async function consume(

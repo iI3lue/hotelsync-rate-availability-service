@@ -13,11 +13,13 @@ jest.mock("../../src/lib/prisma.js", () => ({
       findUnique: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
+      create: jest.fn(),
       updateMany: jest.fn(),
     },
     rate: {
       findMany: jest.fn(),
     },
+    eventOutbox: { create: jest.fn() },
   },
 }));
 
@@ -57,6 +59,9 @@ const VALID_UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 describe("Rate & Availability Service API", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPrisma.$transaction.mockImplementation(
+      async (callback: (tx: any) => Promise<unknown>) => callback(mockPrisma)
+    );
   });
 
   describe("GET /health", () => {
@@ -199,6 +204,39 @@ describe("Rate & Availability Service API", () => {
         });
 
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe("PUT /v1/availability/inventory", () => {
+    it("allows a manager to set manual inventory and returns the projected counts", async () => {
+      mockPrisma.inventory.findUnique.mockResolvedValue(null);
+      mockPrisma.inventory.create.mockResolvedValue({
+        available_count: 6,
+        blocked_count: 0,
+      });
+
+      const res = await request(app)
+        .put("/v1/availability/inventory")
+        .set("Authorization", `Bearer ${MANAGER_TOKEN}`)
+        .send({
+          room_type_id: VALID_UUID,
+          date: "2026-01-15",
+          available_count: 6,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ available: 6, blocked: 0 });
+      expect(mockPrisma.eventOutbox.create).toHaveBeenCalledWith({
+        data: {
+          event_type: "availability.updated",
+          payload: expect.objectContaining({
+            room_type_id: VALID_UUID,
+            date: "2026-01-15",
+            available_count: 6,
+            reason: "manual_adjustment",
+          }),
+        },
+      });
     });
   });
 

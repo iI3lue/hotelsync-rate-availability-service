@@ -75,6 +75,27 @@ export class AvailabilityController {
       next(err);
     }
   }
+
+  async setInventory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { room_type_id, date, available_count } = req.body as {
+        room_type_id: string;
+        date: string;
+        available_count: number;
+      };
+      const result = await inventoryService.setInventory(
+        room_type_id,
+        date,
+        available_count
+      );
+      res.json({
+        available: result.available_count,
+        blocked: result.blocked_count,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const availabilityController = new AvailabilityController();

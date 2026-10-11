@@ -7,6 +7,8 @@ jest.mock("../../src/lib/prisma.js", () => ({
       findMany: jest.fn(),
       create: jest.fn(),
     },
+    eventOutbox: { create: jest.fn() },
+    $transaction: jest.fn(),
   },
 }));
 
@@ -17,6 +19,9 @@ const mockPrisma = prisma as any;
 describe("RateService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPrisma.$transaction.mockImplementation(
+      async (callback: (tx: any) => Promise<unknown>) => callback(mockPrisma)
+    );
   });
 
   describe("findByRoomType", () => {
@@ -42,6 +47,19 @@ describe("RateService", () => {
       const result = await rateService.create("rt1", "2026-01-15", 100);
 
       expect(result).toEqual(rate);
+      expect(mockPrisma.eventOutbox.create).toHaveBeenCalledWith({
+        data: {
+          event_type: "rate.updated",
+          payload: {
+            room_type_id: "rt1",
+            kind: "base_rate",
+            rate_id: "r1",
+            report_date: "2026-01-15",
+            price: 100,
+            occurred_at: expect.any(String),
+          },
+        },
+      });
     });
   });
 });

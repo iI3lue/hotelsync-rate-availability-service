@@ -1,4 +1,5 @@
 import prisma from "../lib/prisma.js";
+import { enqueueOutboxEvent } from "../lib/outbox.js";
 import {
   RATES_TTL_SECONDS,
   cacheDel,
@@ -22,12 +23,23 @@ export class RateService {
   }
 
   async create(roomTypeId: string, reportDate: string, price: number) {
-    const rate = await prisma.rate.create({
-      data: {
+    const rate = await prisma.$transaction(async (tx) => {
+      const created = await tx.rate.create({
+        data: {
+          room_type_id: roomTypeId,
+          report_date: new Date(reportDate),
+          price,
+        },
+      });
+      await enqueueOutboxEvent(tx, "rate.updated", {
         room_type_id: roomTypeId,
-        report_date: new Date(reportDate),
-        price,
-      },
+        kind: "base_rate",
+        rate_id: created.rate_id,
+        report_date: reportDate,
+        price: Number(created.price),
+        occurred_at: new Date().toISOString(),
+      });
+      return created;
     });
     // Invalidación inmediata: la próxima lectura repuebla.
     await cacheDel(ratesKey(roomTypeId));

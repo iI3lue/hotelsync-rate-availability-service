@@ -4,8 +4,18 @@ import { requireServiceKey } from "../lib/auth.js";
 import { validate } from "../middleware/validate.js";
 import { availabilityQuerySchema, availabilityRangeQuerySchema } from "../validators/availability.js";
 import { reserveSchema, releaseSchema } from "../validators/reserve.js";
+import { requireAuth, requireRole } from "../lib/auth.js";
+import { setInventorySchema } from "../validators/inventory.js";
 
 const router = Router();
+
+router.put(
+  "/inventory",
+  requireAuth,
+  requireRole("MANAGER", "SUPER_ADMIN"),
+  validate(setInventorySchema),
+  availabilityController.setInventory.bind(availabilityController)
+);
 
 router.get(
   "/range",

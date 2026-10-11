@@ -22,7 +22,10 @@ const EVENT = {
 function makeDb() {
   const transaction = {
     processedEvent: { create: jest.fn().mockResolvedValue({}) },
-    inventory: { upsert: jest.fn().mockResolvedValue({}) },
+    inventory: {
+      upsert: jest.fn().mockResolvedValue({ available_count: 1, blocked_count: 0 }),
+    },
+    eventOutbox: { create: jest.fn().mockResolvedValue({}) },
   };
   const db = {
     processedEvent: { findUnique: jest.fn().mockResolvedValue(null) },
@@ -51,6 +54,21 @@ describe("physical-room.created consumer", () => {
       data: { event_id: EVENT.event_id, event_type: "physical-room.created" },
     });
     expect(tx.inventory.upsert).toHaveBeenCalledTimes(365);
+    expect(tx.eventOutbox.create).toHaveBeenCalledTimes(365);
+    expect(tx.eventOutbox.create).toHaveBeenNthCalledWith(1, {
+      data: {
+        event_type: "availability.updated",
+        payload: {
+          room_type_id: EVENT.room_type_id,
+          date: "2026-01-01",
+          available_count: 1,
+          blocked_count: 0,
+          reason: "physical_room_created",
+          source_event_id: EVENT.event_id,
+          occurred_at: "2026-01-01T12:00:00.000Z",
+        },
+      },
+    });
     expect(tx.inventory.upsert).toHaveBeenNthCalledWith(1, {
       where: {
         room_type_id_date: {

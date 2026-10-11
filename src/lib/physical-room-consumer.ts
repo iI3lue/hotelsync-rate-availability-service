@@ -2,6 +2,7 @@ import { z } from "zod";
 import prisma from "./prisma.js";
 import { consume } from "./broker.js";
 import { availKey, cacheDel } from "./cache.js";
+import { enqueueOutboxEvent } from "./outbox.js";
 
 const EVENT_TYPE = "physical-room.created";
 const QUEUE = "rate-availability.physical-rooms";
@@ -73,7 +74,7 @@ export async function handlePhysicalRoomCreated(
       });
 
       for (const date of dates) {
-        await tx.inventory.upsert({
+        const inventory = await tx.inventory.upsert({
           where: {
             room_type_id_date: {
               room_type_id: event.room_type_id,
@@ -87,6 +88,15 @@ export async function handlePhysicalRoomCreated(
             blocked_count: 0,
           },
           update: { available_count: { increment: 1 } },
+        });
+        await enqueueOutboxEvent(tx, "availability.updated", {
+          room_type_id: event.room_type_id,
+          date: formatDate(date),
+          available_count: inventory.available_count,
+          blocked_count: inventory.blocked_count,
+          reason: "physical_room_created",
+          source_event_id: event.event_id,
+          occurred_at: now.toISOString(),
         });
       }
     });

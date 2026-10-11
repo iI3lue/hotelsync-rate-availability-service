@@ -11,6 +11,7 @@ jest.mock("../../src/lib/prisma.js", () => ({
       create: jest.fn(),
       updateMany: jest.fn(),
     },
+    eventOutbox: { create: jest.fn() },
   },
 }));
 
@@ -21,6 +22,9 @@ const mockPrisma = prisma as any;
 describe("InventoryService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPrisma.$transaction.mockImplementation(
+      async (callback: (tx: any) => Promise<unknown>) => callback(mockPrisma)
+    );
   });
 
   describe("getAvailability", () => {
@@ -58,6 +62,19 @@ describe("InventoryService", () => {
       const result = await inventoryService.block("rt1", "2026-01-15", 3);
 
       expect(result).toEqual({ available: 7, blocked: 3 });
+      expect(mockPrisma.eventOutbox.create).toHaveBeenCalledWith({
+        data: {
+          event_type: "availability.updated",
+          payload: {
+            room_type_id: "rt1",
+            date: "2026-01-15",
+            available_count: 7,
+            blocked_count: 3,
+            reason: "blocked",
+            occurred_at: expect.any(String),
+          },
+        },
+      });
     });
 
     it("should throw when blocking more than available", async () => {
@@ -94,6 +111,19 @@ describe("InventoryService", () => {
       const result = await inventoryService.unblock("rt1", "2026-01-15", 3);
 
       expect(result).toEqual({ available: 10, blocked: 0 });
+      expect(mockPrisma.eventOutbox.create).toHaveBeenCalledWith({
+        data: {
+          event_type: "availability.updated",
+          payload: {
+            room_type_id: "rt1",
+            date: "2026-01-15",
+            available_count: 10,
+            blocked_count: 0,
+            reason: "unblocked",
+            occurred_at: expect.any(String),
+          },
+        },
+      });
     });
 
     it("should throw when unblocking more than blocked", async () => {
@@ -105,6 +135,37 @@ describe("InventoryService", () => {
       await expect(
         inventoryService.unblock("rt1", "2026-01-15", 5)
       ).rejects.toThrow(AppError);
+    });
+  });
+
+  describe("setInventory", () => {
+    it("sets manual stock and atomically enqueues availability.updated", async () => {
+      mockPrisma.inventory.findUnique.mockResolvedValue(null);
+      mockPrisma.inventory.create.mockResolvedValue({
+        available_count: 6,
+        blocked_count: 0,
+      });
+
+      const result = await inventoryService.setInventory(
+        "rt1",
+        "2026-01-15",
+        6
+      );
+
+      expect(result).toMatchObject({ available_count: 6, blocked_count: 0 });
+      expect(mockPrisma.eventOutbox.create).toHaveBeenCalledWith({
+        data: {
+          event_type: "availability.updated",
+          payload: {
+            room_type_id: "rt1",
+            date: "2026-01-15",
+            available_count: 6,
+            blocked_count: 0,
+            reason: "manual_adjustment",
+            occurred_at: expect.any(String),
+          },
+        },
+      });
     });
   });
 
