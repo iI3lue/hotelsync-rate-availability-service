@@ -1,6 +1,8 @@
 import prisma from "../lib/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
 import { enqueueOutboxEvent } from "../lib/outbox.js";
+import type { AuthClaims } from "../lib/auth.js";
+import { requireRoomTypeScope } from "../lib/room-scope.js";
 import {
   AVAIL_TTL_SECONDS,
   availKey,
@@ -105,7 +107,8 @@ export class InventoryService {
     return result;
   }
 
-  async block(roomTypeId: string, date: string, count: number) {
+  async block(roomTypeId: string, date: string, count: number, actor: AuthClaims) {
+    await requireRoomTypeScope(actor, roomTypeId);
     const updated = await prisma.$transaction(async (tx) => {
       const inventory = await tx.inventory.findUnique({
         where: {
@@ -164,7 +167,8 @@ export class InventoryService {
     };
   }
 
-  async unblock(roomTypeId: string, date: string, count: number) {
+  async unblock(roomTypeId: string, date: string, count: number, actor: AuthClaims) {
+    await requireRoomTypeScope(actor, roomTypeId);
     const updated = await prisma.$transaction(async (tx) => {
       const inventory = await tx.inventory.findUnique({
         where: {
@@ -223,7 +227,8 @@ export class InventoryService {
     };
   }
 
-  async setInventory(roomTypeId: string, date: string, availableCount: number) {
+  async setInventory(roomTypeId: string, date: string, availableCount: number, actor: AuthClaims) {
+    await requireRoomTypeScope(actor, roomTypeId);
     const inventory = await prisma.$transaction(async (tx) => {
       const existing = await tx.inventory.findUnique({
         where: {

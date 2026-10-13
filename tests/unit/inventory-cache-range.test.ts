@@ -1,4 +1,18 @@
 import { inventoryService } from "../../src/services/inventory.service.js";
+import type { AuthClaims } from "../../src/lib/auth.js";
+
+const SUPER_ADMIN: AuthClaims = {
+  sub: "admin-1",
+  email: "admin@example.com",
+  email_verified: true,
+  role: "SUPER_ADMIN",
+  hotel_id: null,
+  scope: "global",
+  iss: "hotelsync",
+  aud: "hotelsync-api",
+  iat: 0,
+  exp: 9999999999,
+};
 
 jest.mock("../../src/lib/prisma.js", () => ({
   __esModule: true,
@@ -89,7 +103,7 @@ describe("InventoryService cache + range", () => {
         blocked_count: 2,
       });
 
-      await inventoryService.block("rt1", "2026-01-15", 2);
+      await inventoryService.block("rt1", "2026-01-15", 2, SUPER_ADMIN);
 
       expect(mockCacheDel).toHaveBeenCalledWith("ra:avail:rt1:2026-01-15");
       expect(availKey("rt1", "2026-01-15")).toBe("ra:avail:rt1:2026-01-15");

@@ -1,5 +1,19 @@
 import { Request, Response, NextFunction } from "express";
 import { inventoryService } from "../services/inventory.service.js";
+import { AuthRequest } from "../lib/auth.js";
+
+const ANONYMOUS = {
+  sub: "",
+  email: "",
+  email_verified: false,
+  role: "",
+  hotel_id: null,
+  scope: "global",
+  iss: "",
+  aud: "",
+  iat: 0,
+  exp: 0,
+} as const;
 
 export class AvailabilityController {
   async get(req: Request, res: Response, next: NextFunction) {
@@ -83,10 +97,12 @@ export class AvailabilityController {
         date: string;
         available_count: number;
       };
+      const auth = (req as AuthRequest).auth;
       const result = await inventoryService.setInventory(
         room_type_id,
         date,
-        available_count
+        available_count,
+        auth ?? { ...ANONYMOUS }
       );
       res.json({
         available: result.available_count,

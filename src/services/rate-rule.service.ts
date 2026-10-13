@@ -1,9 +1,12 @@
 import prisma from "../lib/prisma.js";
 import { enqueueOutboxEvent } from "../lib/outbox.js";
 import { RateRuleInput } from "../validators/rate-rules.js";
+import type { AuthClaims } from "../lib/auth.js";
+import { requireRoomTypeScope } from "../lib/room-scope.js";
 
 export class RateRuleService {
-  async upsert(data: RateRuleInput) {
+  async upsert(data: RateRuleInput, actor: AuthClaims) {
+    await requireRoomTypeScope(actor, data.room_type_id);
     return prisma.$transaction(async (tx) => {
       const existing = await tx.rateRule.findFirst({
         where: {

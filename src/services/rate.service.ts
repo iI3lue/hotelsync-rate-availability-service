@@ -1,5 +1,7 @@
 import prisma from "../lib/prisma.js";
 import { enqueueOutboxEvent } from "../lib/outbox.js";
+import type { AuthClaims } from "../lib/auth.js";
+import { requireRoomTypeScope } from "../lib/room-scope.js";
 import {
   RATES_TTL_SECONDS,
   cacheDel,
@@ -22,7 +24,8 @@ export class RateService {
     return rates;
   }
 
-  async create(roomTypeId: string, reportDate: string, price: number) {
+  async create(roomTypeId: string, reportDate: string, price: number, actor: AuthClaims) {
+    await requireRoomTypeScope(actor, roomTypeId);
     const rate = await prisma.$transaction(async (tx) => {
       const created = await tx.rate.create({
         data: {

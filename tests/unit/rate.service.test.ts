@@ -1,4 +1,18 @@
 import { rateService } from "../../src/services/rate.service.js";
+import type { AuthClaims } from "../../src/lib/auth.js";
+
+const SUPER_ADMIN: AuthClaims = {
+  sub: "admin-1",
+  email: "admin@example.com",
+  email_verified: true,
+  role: "SUPER_ADMIN",
+  hotel_id: null,
+  scope: "global",
+  iss: "hotelsync",
+  aud: "hotelsync-api",
+  iat: 0,
+  exp: 9999999999,
+};
 
 jest.mock("../../src/lib/prisma.js", () => ({
   __esModule: true,
@@ -44,7 +58,7 @@ describe("RateService", () => {
       const rate = { rate_id: "r1", room_type_id: "rt1", report_date: new Date(), price: 100 };
       mockPrisma.rate.create.mockResolvedValue(rate);
 
-      const result = await rateService.create("rt1", "2026-01-15", 100);
+      const result = await rateService.create("rt1", "2026-01-15", 100, SUPER_ADMIN);
 
       expect(result).toEqual(rate);
       expect(mockPrisma.eventOutbox.create).toHaveBeenCalledWith({

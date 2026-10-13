@@ -1,4 +1,18 @@
 import { rateRuleService } from "../../src/services/rate-rule.service.js";
+import type { AuthClaims } from "../../src/lib/auth.js";
+
+const SUPER_ADMIN: AuthClaims = {
+  sub: "admin-1",
+  email: "admin@example.com",
+  email_verified: true,
+  role: "SUPER_ADMIN",
+  hotel_id: null,
+  scope: "global",
+  iss: "hotelsync",
+  aud: "hotelsync-api",
+  iat: 0,
+  exp: 9999999999,
+};
 
 jest.mock("../../src/lib/prisma.js", () => ({
   __esModule: true,
@@ -33,13 +47,16 @@ describe("RateRuleService", () => {
       min_stay: 2,
     });
 
-    const result = await rateRuleService.upsert({
-      room_type_id: "room-type-1",
-      start_date: "2026-11-01",
-      end_date: "2026-11-30",
-      multiplier: 1.25,
-      min_stay: 2,
-    });
+    const result = await rateRuleService.upsert(
+      {
+        room_type_id: "room-type-1",
+        start_date: "2026-11-01",
+        end_date: "2026-11-30",
+        multiplier: 1.25,
+        min_stay: 2,
+      },
+      SUPER_ADMIN
+    );
 
     expect(result.rule_id).toBe("rule-1");
     expect(db.eventOutbox.create).toHaveBeenCalledWith({

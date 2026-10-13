@@ -1,5 +1,19 @@
 import { inventoryService } from "../../src/services/inventory.service.js";
 import { AppError } from "../../src/middleware/error-handler.js";
+import type { AuthClaims } from "../../src/lib/auth.js";
+
+const SUPER_ADMIN: AuthClaims = {
+  sub: "admin-1",
+  email: "admin@example.com",
+  email_verified: true,
+  role: "SUPER_ADMIN",
+  hotel_id: null,
+  scope: "global",
+  iss: "hotelsync",
+  aud: "hotelsync-api",
+  iat: 0,
+  exp: 9999999999,
+};
 
 jest.mock("../../src/lib/prisma.js", () => ({
   __esModule: true,
@@ -59,7 +73,7 @@ describe("InventoryService", () => {
         blocked_count: 3,
       });
 
-      const result = await inventoryService.block("rt1", "2026-01-15", 3);
+      const result = await inventoryService.block("rt1", "2026-01-15", 3, SUPER_ADMIN);
 
       expect(result).toEqual({ available: 7, blocked: 3 });
       expect(mockPrisma.eventOutbox.create).toHaveBeenCalledWith({
@@ -84,7 +98,7 @@ describe("InventoryService", () => {
       });
 
       await expect(
-        inventoryService.block("rt1", "2026-01-15", 5)
+        inventoryService.block("rt1", "2026-01-15", 5, SUPER_ADMIN)
       ).rejects.toThrow(AppError);
     });
 
@@ -92,7 +106,7 @@ describe("InventoryService", () => {
       mockPrisma.inventory.findUnique.mockResolvedValue(null);
 
       await expect(
-        inventoryService.block("rt1", "2026-01-15", 1)
+        inventoryService.block("rt1", "2026-01-15", 1, SUPER_ADMIN)
       ).rejects.toThrow(AppError);
     });
   });
@@ -108,7 +122,7 @@ describe("InventoryService", () => {
         blocked_count: 0,
       });
 
-      const result = await inventoryService.unblock("rt1", "2026-01-15", 3);
+      const result = await inventoryService.unblock("rt1", "2026-01-15", 3, SUPER_ADMIN);
 
       expect(result).toEqual({ available: 10, blocked: 0 });
       expect(mockPrisma.eventOutbox.create).toHaveBeenCalledWith({
@@ -133,7 +147,7 @@ describe("InventoryService", () => {
       });
 
       await expect(
-        inventoryService.unblock("rt1", "2026-01-15", 5)
+        inventoryService.unblock("rt1", "2026-01-15", 5, SUPER_ADMIN)
       ).rejects.toThrow(AppError);
     });
   });
@@ -149,7 +163,8 @@ describe("InventoryService", () => {
       const result = await inventoryService.setInventory(
         "rt1",
         "2026-01-15",
-        6
+        6,
+        SUPER_ADMIN
       );
 
       expect(result).toMatchObject({ available_count: 6, blocked_count: 0 });

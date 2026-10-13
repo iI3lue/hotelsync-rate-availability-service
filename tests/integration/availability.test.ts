@@ -23,9 +23,16 @@ jest.mock("../../src/lib/prisma.js", () => ({
   },
 }));
 
+jest.mock("../../src/lib/property-client.js", () => ({
+  __esModule: true,
+  fetchRoomType: jest.fn(),
+}));
+
 import prisma from "../../src/lib/prisma.js";
 import { signAccessToken } from "../../../user-service/src/lib/tokens.js";
+import { fetchRoomType } from "../../src/lib/property-client.js";
 const mockPrisma = prisma as any;
+const mockFetchRoomType = fetchRoomType as jest.Mock;
 
 process.env.SERVICE_API_KEY = "test-service-key";
 const SERVICE_HEADERS = { "x-service-key": "test-service-key" };
@@ -62,6 +69,14 @@ describe("Rate & Availability Service API", () => {
     mockPrisma.$transaction.mockImplementation(
       async (callback: (tx: any) => Promise<unknown>) => callback(mockPrisma)
     );
+    // El room type de prueba pertenece al hotel del MANAGER_TOKEN.
+    mockFetchRoomType.mockResolvedValue({
+      room_type_id: VALID_UUID,
+      hotel_id: "c1b2c3d4-e5f6-4890-abcd-ef1234567890",
+      name: "Doble",
+      capacity: 2,
+      base_rate: 100,
+    });
   });
 
   describe("GET /health", () => {
@@ -190,6 +205,28 @@ describe("Rate & Availability Service API", () => {
         });
 
       expect(res.status).toBe(401);
+    });
+
+    it("should return 403 when the room type belongs to another hotel", async () => {
+      mockFetchRoomType.mockResolvedValue({
+        room_type_id: VALID_UUID,
+        hotel_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+        name: "Doble ajena",
+        capacity: 2,
+        base_rate: 100,
+      });
+
+      const res = await request(app)
+        .post("/v1/blocks")
+        .set("Authorization", `Bearer ${MANAGER_TOKEN}`)
+        .send({
+          room_type_id: VALID_UUID,
+          date: "2026-01-15",
+          count: 2,
+          action: "block",
+        });
+
+      expect(res.status).toBe(403);
     });
 
     it("should return 400 with invalid action", async () => {
