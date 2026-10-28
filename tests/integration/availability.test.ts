@@ -29,7 +29,7 @@ jest.mock("../../src/lib/property-client.js", () => ({
 }));
 
 import prisma from "../../src/lib/prisma.js";
-import { signAccessToken } from "../../../user-service/src/lib/tokens.js";
+import { signAccessToken } from "../helpers/tokens.js";
 import { fetchRoomType } from "../../src/lib/property-client.js";
 const mockPrisma = prisma as any;
 const mockFetchRoomType = fetchRoomType as jest.Mock;
