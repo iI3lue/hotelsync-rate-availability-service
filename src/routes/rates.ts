@@ -2,7 +2,7 @@ import { Router } from "express";
 import { rateController } from "../controllers/rate.controller.js";
 import { requireAuth, requireRole } from "../lib/auth.js";
 import { validate } from "../middleware/validate.js";
-import { ratesQuerySchema } from "../validators/rates.js";
+import { ratesQuerySchema, createRateSchema } from "../validators/rates.js";
 
 const router = Router();
 
@@ -16,6 +16,7 @@ router.post(
   "/",
   requireAuth,
   requireRole("MANAGER", "SUPER_ADMIN"),
+  validate(createRateSchema),
   rateController.create.bind(rateController)
 );
 
