@@ -1,4 +1,5 @@
 import express from "express";
+import { requireGateway } from "./middleware/gateway.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import availabilityRouter from "./routes/availability.js";
 import ratesRouter from "./routes/rates.js";
@@ -11,6 +12,8 @@ import { startOutboxDispatcher } from "./lib/outbox.js";
 
 const app = express();
 const PORT = process.env.PORT || 3002;
+
+app.use(requireGateway);
 
 app.use(express.json());
 
