@@ -1,3 +1,4 @@
+import { gatewayHeaders } from "../middleware/gateway.js";
 import { AppError } from "../middleware/error-handler.js";
 
 const PROPERTY_API =
@@ -22,6 +23,7 @@ export async function fetchRoomType(id: string): Promise<RoomTypeRef | null> {
     res = await fetch(
       `${PROPERTY_API}/room-types/${encodeURIComponent(id)}`,
       {
+        headers: gatewayHeaders(),
         signal: AbortSignal.timeout(3000),
       }
     );
