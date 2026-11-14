@@ -9,9 +9,13 @@ import prisma from "./lib/prisma.js";
 import { cachePing } from "./lib/cache.js";
 import { startPhysicalRoomConsumer } from "./lib/physical-room-consumer.js";
 import { startOutboxDispatcher } from "./lib/outbox.js";
+import { httpMetrics, metricsHandler } from "./lib/metrics.js";
 
 const app = express();
 const PORT = process.env.PORT || 3002;
+
+app.use(httpMetrics);
+app.get("/metrics", metricsHandler);
 
 app.use(requireGateway);
 

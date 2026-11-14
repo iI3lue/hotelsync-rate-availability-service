@@ -151,6 +151,10 @@ export async function consume(
   });
 }
 
+export function isConnected(): boolean {
+  return channel !== null;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
